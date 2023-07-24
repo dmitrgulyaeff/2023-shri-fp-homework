@@ -1,51 +1,67 @@
-/**
- * @file Домашка по FP ч. 2
- *
- * Подсказки:
- * Метод get у инстанса Api – каррированый
- * GET / https://animals.tech/{id}
- *
- * GET / https://api.tech/numbers/base
- * params:
- * – number [Int] – число
- * – from [Int] – из какой системы счисления
- * – to [Int] – в какую систему счисления
- *
- * Иногда промисы от API будут приходить в состояние rejected, (прямо как и API в реальной жизни)
- * Ответ будет приходить в поле {result}
- */
- import Api from '../tools/api';
+import {
+  pipe,
+  length,
+  gt,
+  lt,
+  test,
+  allPass,
+  ifElse,
+  tap,
+  otherwise,
+  andThen,
+  prop,
+} from 'ramda';
+import Api from '../tools/api';
 
- const api = new Api();
+const api = new Api();
 
- /**
-  * Я – пример, удали меня
-  */
- const wait = time => new Promise(resolve => {
-     setTimeout(resolve, time);
- })
+const isValidValue = allPass([
+  // кол-во символов в числе должно быть меньше 10.
+  pipe(length, gt(10)),
+  // кол-во символов в числе должно быть больше 2.
+  pipe(length, lt(2)),
+  // символы в строке только [0-9] и точка + число должно быть положительным
+  test(/^\d+\.?\d*$/),
+]);
 
- const processSequence = ({value, writeLog, handleSuccess, handleError}) => {
-     /**
-      * Я – пример, удали меня
-      */
-     writeLog(value);
+const parseAndRoundToInt = pipe(parseFloat, Math.round);
+const pow2 = (value) => Math.pow(value, 2);
+const mod3 = (value) => value % 3;
 
-     api.get('https://api.tech/numbers/base', {from: 2, to: 10, number: '01011010101'}).then(({result}) => {
-         writeLog(result);
-     });
+const convertDecimalIntoBinary = (value) =>
+  api.get('https://api.tech/numbers/base', { from: 10, to: 2, number: value });
 
-     wait(2500).then(() => {
-         writeLog('SecondLog')
+const getAnimal = (id) => api.get(`https:/animals.tech/${id}`, {});
 
-         return wait(1500);
-     }).then(() => {
-         writeLog('ThirdLog');
+const processSequence = ({ value, writeLog, handleSuccess, handleError }) => {
+  // 1. Берем строку N. Пишем изначальную строку в writeLog.
+  writeLog(value);
 
-         return wait(400);
-     }).then(() => {
-         handleSuccess('Done');
-     });
- }
+  ifElse(
+    isValidValue,
+    pipe(
+      parseAndRoundToInt,
+      tap(writeLog),
+      convertDecimalIntoBinary,
+      otherwise(handleError),
+      andThen(
+        pipe(
+          prop(['result']),
+          tap(writeLog),
+          length,
+          tap(writeLog),
+          mod3,
+          tap(writeLog),
+          pow2,
+          tap(writeLog),
+          getAnimal,
+          otherwise(handleError),
+          andThen(pipe(prop(['result']), handleSuccess))
+        )
+      )
+    ),
+    () => handleError('ValidationError')
+  )(value);
+};
 
 export default processSequence;
